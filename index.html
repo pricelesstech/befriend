@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Be a Friend</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg:#f6f3ee; --card:#ffffff; --ink:#1f2933; --muted:#6b7280;
+    --accent:#2f7d6d; --accent-ink:#ffffff; --line:#e5e0d8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16191c; --card:#20252a; --ink:#ecebe7; --muted:#a0a7ae; --accent:#5bb5a2; --accent-ink:#0f1a17; --line:#33393f; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:520px; margin:0 auto; padding:20px 16px 48px; }
+  h1 { font-size:1.6rem; margin:8px 0 4px; }
+  h2 { font-size:1.05rem; margin:0 0 8px; }
+  p { margin:0 0 12px; }
+  .muted { color:var(--muted); font-size:.92rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin:14px 0; }
+  label { display:block; font-weight:600; font-size:.92rem; margin:12px 0 4px; }
+  input[type=text], input[type=tel], input[type=email], textarea, select {
+    width:100%; padding:10px 12px; font:inherit; color:var(--ink); background:var(--bg);
+    border:1px solid var(--line); border-radius:10px;
+  }
+  textarea { min-height:76px; resize:vertical; }
+  .row { display:flex; gap:10px; align-items:center; }
+  .btn { display:block; width:100%; text-align:center; text-decoration:none; cursor:pointer; border:0;
+    padding:13px 16px; font:inherit; font-weight:600; border-radius:12px; background:var(--accent); color:var(--accent-ink); margin:8px 0; }
+  .btn.alt { background:transparent; color:var(--ink); border:1px solid var(--line); }
+  .avatar { width:84px; height:84px; border-radius:50%; background:var(--accent); color:var(--accent-ink);
+    display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:700; margin:0 auto 10px; }
+  .center { text-align:center; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin:8px 0; }
+  .chip { background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:3px 12px; font-size:.88rem; }
+  .act { border-top:1px solid var(--line); padding:10px 0; }
+  .act:first-of-type { border-top:0; }
+  .act b { display:block; }
+  .tag { font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); font-weight:700; }
+  #qr { display:flex; justify-content:center; padding:14px; background:#fff; border-radius:12px; }
+  #qr img { width:100%; max-width:280px; height:auto; }
+  .hidden { display:none; }
+  details summary { cursor:pointer; color:var(--muted); font-size:.92rem; }
+  .warn { font-size:.85rem; color:var(--muted); border-left:3px solid var(--accent); padding-left:10px; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+
+<script>
+// ---- Data: everything lives in the link itself (no server, no tracking) ----
+const AUDIENCES = {
+  neighbor: { label:"New neighbor", hello:"Welcome to the neighborhood!", line:"Moving is hard. If you need a recommendation, a hand, or just someone to say hi to, I'm around." },
+  student:  { label:"New student",  hello:"Welcome to the school!",       line:"Starting somewhere new can be lonely. You're welcome to sit with me or hang out anytime." },
+  friend:   { label:"Could use a friend", hello:"Hey, glad you're here.",  line:"Everybody needs a friend sometimes. I'd be happy to be one, with no strings attached." },
+  curious:  { label:"Just curious", hello:"Nice to meet you!",            line:"I'm happy to answer questions, or we can just talk about life. Totally up to you." }
+};
+const ACT_TYPES = { see:"Come and see", serve:"Come and serve", belong:"Come and belong" };
+
+const enc = o => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const dec = s => JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g,"+").replace(/_/g,"/")))));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $ = id => document.getElementById(id);
+const app = $("app");
+
+function route() {
+  const m = location.hash.match(/^#p=(.+)$/);
+  if (m) { try { return viewProfile(dec(m[1])); } catch (e) {} }
+  buildForm();
+}
+window.addEventListener("hashchange", route);
+
+// ---- Sharer: builder ----
+let activities = [{ t:"see", name:"", when:"" }];
+
+function buildForm() {
+  app.innerHTML = `
+    <h1>Be a Friend</h1>
+    <p class="muted">Make a personal welcome card. Show the QR code to someone who might like a friend. No pressure, no sign-up for them.</p>
+
+    <div class="card">
+      <h2>About you</h2>
+      <label for="name">First name</label><input type="text" id="name" placeholder="Corey">
+      <label for="bio">A little about you</label>
+      <textarea id="bio" placeholder="I'm a dad of three who loves hiking and bad puns. I've lived here 10 years."></textarea>
+      <label for="interests">Things you enjoy (comma separated)</label>
+      <input type="text" id="interests" placeholder="Basketball, hiking, board games, cooking">
+      <label for="why">Optional: one sentence about what your faith means to you</label>
+      <textarea id="why" placeholder="My faith and my ward family have been a steady source of friends and peace for me."></textarea>
+    </div>
+
+    <div class="card">
+      <h2>Who's it for?</h2>
+      <select id="aud">${Object.entries(AUDIENCES).map(([k,v]) => `<option value="${k}">${v.label}</option>`).join("")}</select>
+    </div>
+
+    <div class="card">
+      <h2>Things going on (invitations)</h2>
+      <p class="muted">Activities come first. Add what's actually happening near you.</p>
+      <div id="acts"></div>
+      <button class="btn alt" type="button" id="addAct">+ Add another</button>
+    </div>
+
+    <div class="card">
+      <h2>How they can reach you</h2>
+      <label for="phone">Phone (for texting)</label><input type="tel" id="phone" placeholder="555-123-4567">
+      <label for="email">Or email</label><input type="email" id="email" placeholder="you@example.com">
+      <label style="display:flex;gap:8px;align-items:flex-start;font-weight:500">
+        <input type="checkbox" id="minor" style="margin-top:5px"> I'm under 18 (contact goes to a parent or leader instead)
+      </label>
+      <div id="minorBox" class="hidden">
+        <label for="guardian">Parent or leader's name</label><input type="text" id="guardian" placeholder="Brother Smith">
+        <p class="warn">Use their phone or email above. Never put a young person's personal number on a public card.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Your church link (optional)</h2>
+      <label for="ward">Local congregation name</label><input type="text" id="ward" placeholder="Maple Street Ward">
+      <p class="muted">The card links to the Church's official meetinghouse finder automatically.</p>
+    </div>
+
+    <button class="btn" id="make">Make my QR code</button>
+    <p class="muted center">Independent tool. Not an official Church product.</p>`;
+
+  renderActs();
+  $("addAct").onclick = () => { activities.push({t:"see", name:"", when:""}); renderActs(); };
+  $("minor").onchange = e => $("minorBox").classList.toggle("hidden", !e.target.checked);
+  $("make").onclick = makeCard;
+}
+
+function renderActs() {
+  $("acts").innerHTML = activities.map((a,i) => `
+    <div class="act">
+      <select data-i="${i}" data-k="t">${Object.entries(ACT_TYPES).map(([k,v]) => `<option value="${k}" ${a.t===k?"selected":""}>${v}</option>`).join("")}</select>
+      <input type="text" data-i="${i}" data-k="name" value="${esc(a.name)}" placeholder="Friday game night at the church" style="margin-top:6px">
+      <input type="text" data-i="${i}" data-k="when" value="${esc(a.when)}" placeholder="Fri 7pm, 123 Main St" style="margin-top:6px">
+    </div>`).join("");
+  $("acts").querySelectorAll("[data-i]").forEach(el => el.oninput = el.onchange = () => { activities[el.dataset.i][el.dataset.k] = el.value; });
+}
+
+function makeCard() {
+  const name = $("name").value.trim();
+  if (!name) { $("name").focus(); return alert("Add your first name first."); }
+  const minor = $("minor").checked;
+  if (!$("phone").value.trim() && !$("email").value.trim()) return alert("Add a phone or email so they can reach you.");
+  if (minor && !$("guardian").value.trim()) return alert("Add your parent or leader's name.");
+  const data = {
+    n:name, b:$("bio").value.trim(), i:$("interests").value.split(",").map(s=>s.trim()).filter(Boolean),
+    w:$("why").value.trim(), a:$("aud").value,
+    x:activities.filter(a=>a.name.trim()).map(a=>[a.t,a.name.trim(),a.when.trim()]),
+    p:$("phone").value.trim(), e:$("email").value.trim(), m:minor?1:0, g:$("guardian")?.value.trim()||"", c:$("ward").value.trim()
+  };
+  const url = location.href.split("#")[0] + "#p=" + enc(data);
+  showShare(data, url);
+}
+
+function showShare(data, url) {
+  app.innerHTML = `
+    <h1>Your card is ready</h1>
+    <p class="muted">Let them scan this, or send the link. It works in any phone camera.</p>
+    <div class="card"><div id="qr"></div></div>
+    <button class="btn" id="copy">Copy link</button>
+    ${navigator.share ? `<button class="btn alt" id="share">Send the link</button>` : ""}
+    <a class="btn alt" href="${esc(url)}" target="_blank">Preview what they'll see</a>
+    <button class="btn alt" id="back">Edit my card</button>
+    <div class="card">
+      <h2>Conversation starters</h2>
+      <p class="muted">"I don't think we've met. I'm ${esc(data.n)}." &nbsp;·&nbsp; "Want to join us for something fun this week? No pressure at all." &nbsp;·&nbsp; "Here's a card with my info, text me if you ever need anything."</p>
+      <p class="muted">Remember: the friendship is the goal. Follow up with a text in a few days.</p>
+    </div>`;
+  try {
+    const qr = qrcode(0, "M"); qr.addData(url); qr.make();
+    $("qr").innerHTML = qr.createImgTag(6, 8);
+    if (url.length > 1200) $("qr").insertAdjacentHTML("afterend", `<p class="warn">Tip: this card has a lot of text, so the code is dense. Shorter text scans more easily.</p>`);
+  } catch (e) { $("qr").textContent = "QR couldn't be drawn (card too long). Shorten the text or send the link."; }
+  $("copy").onclick = async () => { try { await navigator.clipboard.writeText(url); $("copy").textContent = "Copied!"; } catch { prompt("Copy this link:", url); } };
+  if ($("share")) $("share").onclick = () => navigator.share({ title:`${data.n}'s welcome card`, url }).catch(()=>{});
+  $("back").onclick = () => { location.hash = ""; buildForm(); };
+}
+
+// ---- Scanner: the page the friend sees ----
+function viewProfile(d) {
+  const aud = AUDIENCES[d.a] || AUDIENCES.friend;
+  const who = d.m ? (d.g || "my parent/leader") : d.n;
+  const sms = d.p ? `sms:${d.p.replace(/[^+\d]/g,"")}?&body=${encodeURIComponent("Hi " + (d.m?"":d.n+"! ") + "I scanned your card.")}` : "";
+  const mail = d.e ? `mailto:${d.e}?subject=${encodeURIComponent("Saying hi")}` : "";
+  document.title = `${d.n}'s welcome card`;
+  app.innerHTML = `
+    <div class="center" style="padding-top:12px">
+      <div class="avatar">${esc(d.n[0].toUpperCase())}</div>
+      <h1>${esc(aud.hello)}</h1>
+      <p>I'm ${esc(d.n)}. ${esc(aud.line)}</p>
+    </div>
+
+    ${d.b || d.i.length ? `<div class="card center">
+      <h2>A little about me</h2>
+      ${d.b ? `<p>${esc(d.b)}</p>` : ""}
+      ${d.i.length ? `<div class="chips">${d.i.map(i=>`<span class="chip">${esc(i)}</span>`).join("")}</div>` : ""}
+    </div>` : ""}
+
+    ${d.x.length ? `<div class="card">
+      <h2>Things happening near you</h2>
+      <p class="muted">Everyone is welcome. Come to one, none, or all. No obligation.</p>
+      ${d.x.map(([t,name,when]) => `<div class="act"><span class="tag">${esc(ACT_TYPES[t]||"Come and see")}</span><b>${esc(name)}</b>${when?`<span class="muted">${esc(when)}</span>`:""}</div>`).join("")}
+    </div>` : ""}
+
+    <div class="card center">
+      <h2>Want to connect?</h2>
+      <p class="muted">${d.m ? `Messages go to ${esc(d.g)}, who will pass them to ${esc(d.n)}.` : "Only if you want to. Nobody will contact you first."}</p>
+      ${sms ? `<a class="btn" href="${sms}">Text ${esc(who)}</a>` : ""}
+      ${mail ? `<a class="btn ${sms?"alt":""}" href="${mail}">Email ${esc(who)}</a>` : ""}
+    </div>
+
+    <details class="card">
+      <summary>Curious about what I believe? (totally optional)</summary>
+      ${d.w ? `<p style="margin-top:10px">${esc(d.w)}</p>` : ""}
+      <p class="muted">I'm a member of The Church of Jesus Christ of Latter-day Saints${d.c?` (${esc(d.c)})`:""}.</p>
+      <a class="btn alt" href="https://www.churchofjesuschrist.org/comeuntochrist/believe" target="_blank" rel="noopener">Learn more on the official site</a>
+      <a class="btn alt" href="https://maps.churchofjesuschrist.org/" target="_blank" rel="noopener">Find a congregation near you</a>
+    </details>
+
+    <p class="muted center">This card doesn't track you or collect your information.</p>`;
+}
+
+route();
+</script>
+</body>
+</html>
